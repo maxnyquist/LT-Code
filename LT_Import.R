@@ -20,11 +20,6 @@
 # unnecessary code. Build dataframe into the existing (albeit empty) database table. Create data folder structure for raw/processed data? Prepare 
 # for future spreadsheets in different formats. 
 #
-#
-#
-
-
-
 ### LOAD PACKAGES ####
 pkg <- c("tidyverse", "magrittr", "lubridate","RODBC", "DBI", "odbc")
 sapply(pkg, library, character.only = TRUE)
@@ -35,71 +30,203 @@ sapply(pkg, library, character.only = TRUE)
 options(scipen = 999)
 
 ### SOURCE DATA/FUNCTIONS/FILES ####
+### Config filepath 
+# R_Config <- read.csv("//env.govt.state.ma.us/enterprise/DCR-WestBoylston-WKGRP/WatershedJAH/EQStaff/WaterQualityMonitoring/R-Shared/Configs/R_Config.csv", header = TRUE)
+# config <- as.character(R_Config$CONFIG_VALUE)
+### Directory for all Lake Trout Data sent from MassWildlife 
+ltdata_dir <- "W:/WatershedJAH/EQStaff/Aquatic Biology/Fish/Lake Trout/Wachusett Lake Trout Tagging Program/Data"
+### Annual Data 
+### change this folder each year when new data arrives from MassWildlife 
+### How can we avoid a script update each year?  
 
-R_Config <- read.csv("//env.govt.state.ma.us/enterprise/DCR-WestBoylston-WKGRP/WatershedJAH/EQStaff/WaterQualityMonitoring/R-Shared/Configs/R_Config.csv", header = TRUE)
-config <- as.character(R_Config$CONFIG_VALUE)
+ltdata_year_dir <- paste0(ltdata_dir, "/2020 Data")
+ltdata_year_dir_2019 <- paste0(ltdata_dir, "/2019 Data")
+
+
+
+
 
 ### FETCH CACHED DATA FROM WAVE RDS FILES ####
-datadir <- config[18]
-### Make a list of all the .rds files using full path
-# rds_files <- list.files(datadir,full.names = TRUE ,pattern = "\\.rds$")
-# rds_files # Take a look at list of files
-
-### Select which rds files needed for this script
+### Lake Trout Access database. No longer using this, but was necessary component in creating lt.rds  
+# datadir <- config[18]
+# ### Make a list of all the .rds files using full path
+rds_files <- list.files(ltdata_dir,full.names = TRUE ,pattern = "\\.rds$")
+rds_files # Take a look at list of files
+# 
+# ### Select which rds files needed for this script
 # rds_in <- c(3,4,7:9)
 
 ### subset rds files (if you want all of them then skip rds_in and the following line)
 # rds_files <- rds_files[rds_in]
 
 ### create an object that contains all of the rds files
-# data <- lapply(rds_files, readRDS)
+### Only one .rds for LT data  
+data <- lapply(rds_files, readRDS)
 
 ### Make a list of the df names by eliminating extension from files
-# df_names <- gsub(".rds", "", list.files(datadir, pattern = "\\.rds$"))
+ df_names <- gsub(".rds", "", list.files(ltdata_dir, pattern = "\\.rds$"))
 # df_names <- df_names[rds_in]
-# # name each df in the data object appropriately
-# names(data) <- df_names
+# name each df in the data object appropriately
+ names(data) <- df_names
 
 ### Extract each element of the data object into the global environment
-# list2env(data ,.GlobalEnv)
+ list2env(data ,.GlobalEnv)
 
 ### Remove data
-# rm(data)
+ rm(data)
+
+### FETCH ANNUAL DATA FOR QAQC ####
+### 'df1' and 'df2' are workarounds to avoid updating portions of the script each year. Generic names.  
+data <- list.files(ltdata_year_dir, full.names = TRUE, pattern = "\\.csv$")
+data2019 <- list.files(ltdata_year_dir_2019, full.names = TRUE, pattern = "\\.csv$")
+ 
+data <- lapply(data, read_csv) 
+df1 <- as.data.frame(data[[1]])
+df2 <- as.data.frame(data[[2]])
+# 
+data2019 <- lapply(data2019, read_csv) 
+df12019 <- as.data.frame(data2019[[1]])
+df22019 <- as.data.frame(data2019[[2]])
+# 
+
+# names <- gsub(".csv", "", list.files(ltdata_year_dir, pattern = "\\.csv"))
+# names(data) <- names
+# 
+# list2env(data,.GlobalEnv)
+### Make a list of the df names by eliminating extension from files
+### useful, but does not allow for the script to be run without annual modifications. 
+### could save the files we receive from MassWildlife as "LT_data.csv" and "Sample_LT_data.csv" and put things in a 
+### 'Current Year' directory.  
+#df_annual_names <- gsub(".csv", "", list.files(ltdata_year_dir, pattern = "\\.csv$"))
+# df_names <- df_names[rds_in]
+# name each df in the data object appropriately
+#names(annual_data) <- df_annual_names
+
+### Extract each element of the data object into the global environment
+#list2env(annual_data ,.GlobalEnv)
+
+
+
+
+
 
 ### CONNECT TO A FRONT-END DATABASE ####
-
+### This portion of the script interacts with the LT Access database. Migrating away from this.  
 ### Set DB
-db <- config[18]
-### Connect to Database 
-con <- dbConnect(odbc::odbc(),
-                 .connection_string = paste("driver={Microsoft Access Driver (*.mdb)}",
-                                            paste0("DBQ=", db), "Uid=Admin;Pwd=;", sep = ";"),
-                 timezone = "America/New_York")
-### See the tables 
-tables <- dbListTables(con)  
-tables
-### Fetch an entire table (avoid using SQL queries - just pull entire tables and subset in R)
-df.qwfish <- dbReadTable(con, "Q&W Fish Table")
-df.qwsample <- dbReadTable(con, "Q&W Sample Table")
-df.wfish<- dbReadTable(con, "Wachusett Fish Table")
-df.wsample<- dbReadTable(con, "Wachusett Sample Table")
-query.df <- dbReadTable(con, "Wachusett Fish Info Query")
-df <- dbReadTable(con, "Q&W Table")
+# db <- config[18]
+# ### Connect to Database 
+# con <- dbConnect(odbc::odbc(),
+#                  .connection_string = paste("driver={Microsoft Access Driver (*.mdb)}",
+#                                             paste0("DBQ=", db), "Uid=Admin;Pwd=;", sep = ";"),
+#                  timezone = "America/New_York")
+# ### See the tables 
+# tables <- dbListTables(con)  
+# tables
+# ### Fetch an entire table (avoid using SQL queries - just pull entire tables and subset in R)
+# df.qwfish <- dbReadTable(con, "Q&W Fish Table")
+# df.qwsample <- dbReadTable(con, "Q&W Sample Table")
+# df.wfish<- dbReadTable(con, "Wachusett Fish Table")
+# df.wsample<- dbReadTable(con, "Wachusett Sample Table")
+# query.df <- dbReadTable(con, "Wachusett Fish Info Query")
+# df <- dbReadTable(con, "Q&W Table")
+# 
+# ### create vector of column names from db Table ####
+# dbcolnames <- paste(names(df))
+# ### Always disconnect and rm connection when done with db
+# dbDisconnect(con)
+# rm(con)
+# rm(R_Config)
 
-### create vector of column names from db Table ####
-dbcolnames <- paste(names(df))
-### Always disconnect and rm connection when done with db
-dbDisconnect(con)
-rm(con)
-rm(R_Config)
+### Create vector of column names from current .rds ####
+colnames <- paste(names(ltdata))
+#"Fish_ID"              "sample_id"            "waterbody"            "sample_date"          "fish_code"           
+# "gender"               "length"               "weight"               "run_num"              "tag_num"             
+# "Unique_ID"            "tagging_location"     "location_description" "comments"             "saris_palis"
 
 ### SCRIPT BEGIN ####
+### join length frequency data with sample data by sample_id. 
+### Figure out how to name these two data frames differently upon import. Nice function to automatically add name from 
+### the directory, but do not want the year (e.g. 2020) in the script. This requires an annual update of the script (not desireable) 
+df1 <- df1 %>% 
+  rename(Fish_ID = ID) 
+df1 <- df1[, (names(df1) %in% colnames)]
+df2 <- df2[, (names(df2) %in% colnames)]
+df2 <- df2 %>% select(-"weight")
+
+
+### for 2019 data 
+df12019 <- df12019[, (names(df12019) %in% colnames)]
+df12019 <- df12019 %>% select(-"weight") 
+df12019$sample_date <- mdy(df12019$sample_date)
+df22019 <- df22019 %>% rename(Fish_ID = id, location = LOCATION, comments = COMMENTS) 
+df22019 <- df22019[, (names(df22019) %in% colnames)]
+
+
+#df2 <- df2 #%>% 
+#  select(., c("sample_id","waterbody","sample_date","location_description","saris_palis")) #%>% 
+#  select(-"weight")
+#annual_data2019 <- left_join(df1, df2, by = "sample_id")
+annual_data <- left_join(df1, df2, by = "sample_id")
+annual_data$sample_date <-  mdy(annual_data$sample_date)
+
+#annual_data <- rename(annual_data, Fish_ID = ID)
+wach_data <- ltdata %>% 
+  filter(waterbody == "Wachusett Reservoir") #%>% 
+  filter(year(sample_date) != 2019)
+
+wach_data2019 <- ltdata %>% 
+  filter(waterbody == "Wachusett Reservoir") %>% 
+  filter(year(sample_date) == 2019) %>% 
+  rename(sample_id = Fish_ID, Fish_ID = sample_id)
+
+wach_data2019 <- left_join(wach_data2019, df12019, by = "sample_date") %>% 
+  transmute(wach_data2019, sample_id = ifelse(is.na(sample_id.x), sample_id.y, sample_id.x))
+
+
+annual_data <- bind_rows(annual_data, wach_data2019)
+#left_join(df1, df2, by="y") %>% 
+#  transmute(y, x1 = ifelse(is.na(x1.y), x1.x, x1.y))
+    
+
+    
+names(wach_data)
+names(annual_data)
+
+df <- bind_rows(wach_data, annual_data)
+
+rm(df1)
+rm(df2)
+rm(wach_data)
+rm(ltdata)
+rm(test)
+rm(data)
+rm(df12019)
+rm(df22019)
+rm(wach_data2019)
+rm(data2019)
+
+### w.19.df created below 
+# df <- bind_rows(df, w.19.df)
+# 
+# ### identify duplicates 
+# dupecheck <- which(duplicated(df$Fish_ID))
+# dupes <- df$Fish_ID[dupecheck]
+# view(dupes)
+# duplicate <- duplicated(df.fish$Fish_ID)
+# sum(duplicate)
+# sum(is.na(test$Fish_ID))
+# 
+# 
+# 
+# 
+# test <- test %>% distinct()
+
 ### bind rows of w.fishtbl to qw.fishtbl
 ### create vector of col names from df.wfish to apply to df.qwfish. easier to rbind 
-w.fish.colnames <- names(df.wfish) 
-colnames(df.qwfish) <- w.fish.colnames
-### unique to df.qwfish. Removes NA tagging locations from df. solution to later problem.  
-df.qwfish <- df.qwfish[!c(df.qwfish$tagging_location == "NA"), ]
+# w.fish.colnames <- names(df.wfish) 
+# colnames(df.qwfish) <- w.fish.colnames
+# ### unique to df.qwfish. Removes NA tagging locations from df. solution to later problem.  
+# df.qwfish <- df.qwfish[!c(df.qwfish$tagging_location == "NA"), ]
 
 ### Combine Quabbin and Wachusett fish dataframes and remove duplicates ####
 
@@ -241,8 +368,8 @@ sum(duplicates)
 # dupes <- df.fish$Fish_ID[dupecheck]
 # view(dupes)
 ### Create dataframes from new annual data ####
-w.19.df <- read_csv(paste0(getwd(), "/Data/2019 Data/lt_WACHUSETT_2019.csv"), col_names = TRUE)
-q.19.df <- read_csv(paste0(getwd(), "/Data/2019 Data/quabbin_lt_2019.csv"), col_names = TRUE)
+w.19.df <- read_csv(paste0(ltdata_dir, "/2019 Data/lt_WACHUSETT_2019.csv"), col_names = TRUE)
+#q.19.df <- read_csv(paste0(getwd(), "/Data/2019 Data/quabbin_lt_2019.csv"), col_names = TRUE)
 
 
 ### create vector of column names from data frame. remove unneccessary columns  
@@ -254,7 +381,7 @@ w.19.df <- w.19.df %>%
   mutate(waterbody = "Wachusett Reservoir")
   
 ### rename columns  
-names(w.19.df) = c("sample_id",
+names(w.19.df) = c("Fish_ID",
                    "sample_date",
                    "fish_code",
                    "length",
@@ -310,16 +437,16 @@ df$tag_num[df$tag_num=="NA"] <- NA
 
 ### create dataframe for database table ####
   
-df <- bind_rows(df, df.19)
+#df <- bind_rows(df, df.19)
 ### temporary, for LT_analysis.R until dataframe is imported  
-dflt <- df
+#dflt <- df
 
-ltdata <- saveRDS(df, file =  "ltdata.rds")
+#ltdata <- saveRDS(df, file =  "ltdata_update.rds")
 
 data <- readRDS("ltdata.rds")
 
+ltrds <- saveRDS(df, file = paste0(ltdata_dir, "/ltdata_2020.rds"))
 
-getwd()
 ########################################################################.
 ###                              Final Reformatting                 ####
 ########################################################################.
