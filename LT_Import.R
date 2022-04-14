@@ -30,12 +30,18 @@ sapply(pkg, library, character.only = TRUE)
 options(scipen = 999)
 
 ### SOURCE DATA/FUNCTIONS/FILES ####
-### Config filepath 
-# R_Config <- read.csv("//env.govt.state.ma.us/enterprise/DCR-WestBoylston-WKGRP/WatershedJAH/EQStaff/WaterQualityMonitoring/R-Shared/Configs/R_Config.csv", header = TRUE)
-# config <- as.character(R_Config$CONFIG_VALUE)
 ### Directory for all Lake Trout Data sent from MassWildlife 
+### Old network Data folder  
 ltdata_dir <- "W:/WatershedJAH/EQStaff/Aquatic Biology/Fish/Lake Trout/Wachusett Lake Trout Tagging Program/Data"
+### Current Local directory sent from MassWildlife 
+ltdata_dir <- "C:/MassWildlifeDatabase/Fisheries Survey and Inventory Database.accdb"
+
+
+
+
+
 ### Annual Data 
+
 ### change this folder each year when new data arrives from MassWildlife 
 ### How can we avoid a script update each year?  
 
@@ -114,15 +120,34 @@ df22019 <- as.data.frame(data2019[[2]])
 ### This portion of the script interacts with the LT Access database. Migrating away from this.  
 ### Set DB
 # db <- config[18]
+db <- ltdata_dir
 # ### Connect to Database 
-# con <- dbConnect(odbc::odbc(),
-#                  .connection_string = paste("driver={Microsoft Access Driver (*.mdb)}",
-#                                             paste0("DBQ=", db), "Uid=Admin;Pwd=;", sep = ";"),
-#                  timezone = "America/New_York")
-# ### See the tables 
-# tables <- dbListTables(con)  
-# tables
+con <- dbConnect(odbc::odbc(),
+                  .connection_string = paste("Driver={Microsoft Access Driver (*.mdb, *.accdb)}",
+                                             paste0("DBQ=", db), "Uid=Admin;Pwd=;", sep = ";"),
+                  timezone = "America/New_York")
+### See the tables 
+tables <- dbListTables(con)  
+tables
+
+### Fetch tables 
+sample_data <- dbReadTable(con, "sample_data")
+fish_data <- dbReadTable(con, "fish_data")
+sample <- sample_data %>% 
+    filter(grepl("wachusett reservoir", waterbody, ignore.case = TRUE) & method == "Gillnet") %>% 
+    select(-"weight")
+### join sample data and fish data  
+fish_query <- inner_join(fish_data, sample, by = "sample_id")
+df <- fish_query
+
+
+### Identify duplicates, updated 2/28/2022 ####
+dupecheck <- which(duplicated(df$ID))
+dupes <- df$ID[dupecheck]
+
+
 # ### Fetch an entire table (avoid using SQL queries - just pull entire tables and subset in R)
+### Old formatting of Wachusett database  
 # df.qwfish <- dbReadTable(con, "Q&W Fish Table")
 # df.qwsample <- dbReadTable(con, "Q&W Sample Table")
 # df.wfish<- dbReadTable(con, "Wachusett Fish Table")
@@ -130,15 +155,16 @@ df22019 <- as.data.frame(data2019[[2]])
 # query.df <- dbReadTable(con, "Wachusett Fish Info Query")
 # df <- dbReadTable(con, "Q&W Table")
 # 
-# ### create vector of column names from db Table ####
-# dbcolnames <- paste(names(df))
-# ### Always disconnect and rm connection when done with db
-# dbDisconnect(con)
-# rm(con)
+### create vector of column names from db Table ####
+dbcolnames <- paste(names(df))
+### Always disconnect and rm connection when done with db
+dbDisconnect(con)
+rm(con)
 # rm(R_Config)
 
 ### Create vector of column names from current .rds ####
 colnames <- paste(names(ltdata))
+colnames <- paste(names(df))
 #"Fish_ID"              "sample_id"            "waterbody"            "sample_date"          "fish_code"           
 # "gender"               "length"               "weight"               "run_num"              "tag_num"             
 # "Unique_ID"            "tagging_location"     "location_description" "comments"             "saris_palis"
@@ -147,6 +173,7 @@ colnames <- paste(names(ltdata))
 ### join length frequency data with sample data by sample_id. 
 ### Figure out how to name these two data frames differently upon import. Nice function to automatically add name from 
 ### the directory, but do not want the year (e.g. 2020) in the script. This requires an annual update of the script (not desireable) 
+### Methods for dealing with .rds?  ####
 df1 <- df1 %>% 
   rename(Fish_ID = ID) 
 df1 <- df1[, (names(df1) %in% colnames)]
@@ -254,18 +281,18 @@ df.fish <- df.fish[ !df.fish$Fish_ID %in% dupes, ]
 # filter(!is.na(weight) | weight == 650 | weight == 1800 | tagging_location == "South Dike")  
 
 ### select correct duplicate values and drop duplicate Fish_ID rows that contain incorrect data 
-dup <- dup %>% 
-  group_by(Fish_ID) %>% 
-  filter(n()>1) %>% 
-  filter(!is.na(weight) | weight == 650 | weight == 1800 | tagging_location == "South Dike") %>% 
-  filter(!tagging_location == "s.carville rock wall" & !weight == 1650 & !weight == 180) %>% 
-  as.data.frame()
-
-### bind former duplicate values with data back to dataframe with distinct values only  
+# dup <- dup %>% 
+#   group_by(Fish_ID) %>% 
+#   filter(n()>1) %>% 
+#   filter(!is.na(weight) | weight == 650 | weight == 1800 | tagging_location == "South Dike") %>% 
+#   filter(!tagging_location == "s.carville rock wall" & !weight == 1650 & !weight == 180) %>% 
+#   as.data.frame()
+# 
+# ### bind former duplicate values with data back to dataframe with distinct values only  
 df.fish <- rbind(df.fish, dup)
 
 ### clean up sample dataframes ####
-
+### old, maintain for review purposes 
 df.wsample <- df.wsample %>% 
   select(sample_id, saris_palis, waterbody, sample_date, town, location_description, latitude, longitude, method, crew_names, habitat_comment) %>% 
   subset(format(sample_date, "%Y") == 2018)
