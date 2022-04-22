@@ -20,65 +20,48 @@ sapply(pkg, library, character.only = TRUE)
 # 
 # ### SOURCE DATA/FUNCTIONS/FILES ####
 # 
-# R_Config <- read.csv("//env.govt.state.ma.us/enterprise/DCR-WestBoylston-WKGRP/WatershedJAH/EQStaff/WQDatabase/R-Shared/Code/R_Config.csv", header = TRUE)
-# config <- as.character(R_Config$CONFIG_VALUE)
-# 
-# # ### FETCH CACHED DATA FROM WAVE RDS FILES ####
-#  datadir <- config[18]
-# ### Make a list of all the .rds files using full path
-# rds_files <- list.files(datadir,full.names = TRUE ,pattern = "\\.rds$")
-# rds_files # Take a look at list of files
-# ### Select which rds files needed for this script
-# rds_in <- c(3,4,7:9)
-# ### subset rds files (if you want all of them then skip rds_in and the following line)
-# rds_files <- rds_files[rds_in]
-# ### create an object that contains all of the rds files
-# data <- lapply(rds_files, readRDS)
-# ### Make a list of the df names by eliminating extension from files
-# df_names <- gsub(".rds", "", list.files(datadir, pattern = "\\.rds$"))
-# df_names <- df_names[rds_in]
-# # name each df in the data object appropriately
-# names(data) <- df_names
-# ### Extract each element of the data object into the global environment
-# list2env(data ,.GlobalEnv)
-# ### Remove data
-# rm(data)
+### This is not a  permanent solution 
+ltdata_dir <- "C:/MassWildlifeDatabase/Fisheries Survey and Inventory Database.accdb"
 
-### CONNECT TO A FRONT-END DATABASE ####
-# 
-# ### Set DB
-# db <- config[18]
+db <- ltdata_dir
 # ### Connect to Database 
- #con <- dbConnect(odbc::odbc(),
-#                  .connection_string = paste("driver={Microsoft Access Driver (*.mdb)}",
-#                                             paste0("DBQ=", db), "Uid=Admin;Pwd=;", sep = ";"),
-#                  timezone = "America/New_York")
-# ### See the tables 
-# tables <- dbListTables(con)  
-# ### Fetch an entire table (avoid using SQL queries - just pull entire tables and subset in R)
-# tbl <- dbReadTable(con, "Q&W Table")
-# ### Always disconnect and rm connection when done with db
-# dbDisconnect(con)
-# rm(con)
-# 
-# 
+con <- dbConnect(odbc::odbc(),
+                 .connection_string = paste("Driver={Microsoft Access Driver (*.mdb, *.accdb)}",
+                                            paste0("DBQ=", db), "Uid=Admin;Pwd=;", sep = ";"),
+                 timezone = "America/New_York")
+### See the tables 
+tables <- dbListTables(con)  
+tables
+
+### Fetch tables 
+sample_data <- dbReadTable(con, "sample_data")
+fish_data <- dbReadTable(con, "fish_data")
+### keep full data set in sample_data df 
+sample <- sample_data %>% 
+  filter(grepl("wachusett reservoir", waterbody, ignore.case = TRUE) & method == "Gillnet") %>% 
+  select(-"weight")
+### join Wachusett sample data and fish data  
+fish_query <- inner_join(fish_data, sample, by = "sample_id")
+ 
+### filter to only LT  
+df <- fish_query %>% 
+ filter(fish_code == "LT")
+
+### Identify duplicates, updated 2/28/2022 ####
+dupecheck <- which(duplicated(df$ID))
+dupes <- df$ID[dupecheck]
+
 # ### TO REPORT IN THE ANNUAL ####
-# Between 2014-2019
-# Number captured? Number tagged and released? Number of fish recapped? Number released with no tags, harvested, collected for otoliths, morts? 
-# % males? % females? % immature or unknown? 
-# 2019 only, same questions above. 
-# New questions 
-# Recap growth
-# Plot Lake Trout growth curve (reference other scripts)
-# 
+ 
 ### Directory for all Lake Trout Data sent from MassWildlife 
-ltdata_dir <- "W:/WatershedJAH/EQStaff/Aquatic Biology/Fish/Lake Trout/Wachusett Lake Trout Tagging Program/Data"
+# can update Sharepoint folder of db at later date
+#ltdata_dir <- "W:/WatershedJAH/EQStaff/Aquatic Biology/Fish/Lake Trout/Wachusett Lake Trout Tagging Program/Data"
 ### Annual Data 
 ### change this folder each year when new data arrives from MassWildlife 
 ### How can we avoid a script update each year?  
 
+### for pulling in year by year 
 ltdata_year_dir <- paste0(ltdata_dir, "/2020 Data")
-ltdata_year_dir_2019 <- paste0(ltdata_dir, "/2019 Data")
 
 
 
@@ -122,14 +105,22 @@ rm(data)
 ########################################################################.
 dflt <- ltdata_2020
 dflt <- ltdata
+dflt <- df
+### dataframe 'df' from LT_Import.R 
+
+
 recaps <- dflt %>% 
-  filter(waterbody == "Wachusett Reservoir" & fish_code == "LT") %>% 
   group_by(tag_num) %>% 
   filter(n()>1) %>% 
   summarise(recaps = n()) %>% 
   drop_na() %>% 
   filter(!tag_num == "NA") %>% 
   distinct() 
+
+view(recaps )
+
+
+
 
 # recaps <- dflt %>% 
 #   filter(waterbody == "Wachusett Reservoir" & fish_code == "LT") %>% 
@@ -150,13 +141,66 @@ count(recaps)
 ### use .rds
 #dflt <- df
 ### select only LT from Wachusett Reservoir 
-dflt <- dflt %>% 
-  filter(waterbody == "Wachusett Reservoir" & fish_code == "LT")
-
+dflt <- df
 
 test <- dflt
+### coerce data for graphing purposes  
 dflt$gender[dflt$gender != "F" & dflt$gender != "M"]  <- "U/I"
 dflt$gender[is.na(dflt$gender)] <- "U/I"
+
+
+### recaps by year? 
+
+recaps_count <- dflt %>% 
+  group_by(tag_num) %>% 
+  filter(n()>1) %>% 
+  summarise(recaps = n()) %>% 
+  drop_na() %>% 
+  filter(!tag_num == "NA") %>% 
+  distinct() 
+
+recaps_all <- dflt %>% 
+  select(tag_num, sample_date, gender, weight, length) %>% 
+  mutate(year = year(sample_date), .keep = "all", .after = tag_num) %>% 
+  filter(!tag_num == "NA") %>% 
+  mutate(recap = duplicated(tag_num))
+  
+recaps_data <- recaps_all %>% 
+  group_by(tag_num) %>% 
+  filter(n() >1)
+
+unique_tags <- recaps_all %>% 
+  distinct(tag_num)
+
+
+
+tagged_year <- recaps_all %>% 
+  
+   
+  filter(year == as.numeric(year(Sys.Date())-1))
+
+
+### use this to test recaps  
+proof_recaps <- dflt %>% 
+filter(tag_num == "00-069F-025C")
+
+
+
+mutate(recap_count = count(duplicated(tag_num)))
+
+duplicated(recaps_year$tag_num)
+
+
+recaps_year <- dflt %>% 
+  group_by(year(sample_date), tag_num) %>% 
+  summarise(recaps = tally())
+  
+  
+view(recaps_year)
+
+
+
+
 
 
 ### males only 
