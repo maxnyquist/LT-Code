@@ -32,11 +32,10 @@ options(scipen = 999)
 ### SOURCE DATA/FUNCTIONS/FILES ####
 ### Directory for all Lake Trout Data sent from MassWildlife 
 ### Old network Data folder  
-ltdata_dir <- "W:/WatershedJAH/EQStaff/Aquatic Biology/Fish/Lake Trout/Wachusett Lake Trout Tagging Program/Data"
 ### Current Local directory sent from MassWildlife 
-ltdata_dir <- "C:/MassWildlifeDatabase/Fisheries Survey and Inventory Database.accdb"
+ltdata_db_dir <- "C:/MassWildlifeDatabase/Fisheries Survey and Inventory Database.accdb"
 
-
+ltdata_dir <- "C:/Users/Max.Nyquist/Commonwealth of Massachusetts/DCR WSP - WaterQualityMonitoring/Aquatic Biology/Fish/Lake Trout/Wachusett Lake Trout Tagging Program/Data"
 
 
 
@@ -45,7 +44,7 @@ ltdata_dir <- "C:/MassWildlifeDatabase/Fisheries Survey and Inventory Database.a
 ### change this folder each year when new data arrives from MassWildlife 
 ### How can we avoid a script update each year?  
 
-ltdata_year_dir <- paste0(ltdata_dir, "/2020 Data")
+ltdata_year_dir <- paste0(ltdata_dir, "/2022 Data")
 ltdata_year_dir_2019 <- paste0(ltdata_dir, "/2019 Data")
 
 
@@ -120,7 +119,7 @@ df22019 <- as.data.frame(data2019[[2]])
 ### This portion of the script interacts with the LT Access database. Migrating away from this.  
 ### Set DB
 # db <- config[18]
-db <- ltdata_dir
+db <- ltdata_db_dir
 # ### Connect to Database 
 con <- dbConnect(odbc::odbc(),
                   .connection_string = paste("Driver={Microsoft Access Driver (*.mdb, *.accdb)}",
@@ -163,7 +162,7 @@ rm(con)
 # rm(R_Config)
 
 ### Create vector of column names from current .rds ####
-colnames <- paste(names(ltdata))
+#colnames <- paste(names(ltdata))
 colnames <- paste(names(df))
 #"Fish_ID"              "sample_id"            "waterbody"            "sample_date"          "fish_code"           
 # "gender"               "length"               "weight"               "run_num"              "tag_num"             
@@ -174,7 +173,10 @@ colnames <- paste(names(df))
 ### Figure out how to name these two data frames differently upon import. Nice function to automatically add name from 
 ### the directory, but do not want the year (e.g. 2020) in the script. This requires an annual update of the script (not desireable) 
 ### Methods for dealing with .rds?  ####
-df1 <- df1 %>% 
+str(df1)
+
+
+#df1 <- df1 %>% 
   rename(Fish_ID = ID) 
 df1 <- df1[, (names(df1) %in% colnames)]
 df2 <- df2[, (names(df2) %in% colnames)]
@@ -196,6 +198,9 @@ df22019 <- df22019[, (names(df22019) %in% colnames)]
 annual_data <- left_join(df1, df2, by = "sample_id")
 annual_data$sample_date <-  mdy(annual_data$sample_date)
 
+### for 2022 data with no sample sheet
+annual_data <- df1
+
 #annual_data <- rename(annual_data, Fish_ID = ID)
 wach_data <- ltdata %>% 
   filter(waterbody == "Wachusett Reservoir") #%>% 
@@ -213,7 +218,7 @@ wach_data2019 <- left_join(wach_data2019, df12019, by = "sample_date") %>%
 annual_data <- bind_rows(annual_data, wach_data2019)
 #left_join(df1, df2, by="y") %>% 
 #  transmute(y, x1 = ifelse(is.na(x1.y), x1.x, x1.y))
-    
+annual_data <- bind_rows(df, df1)    
 
     
 names(wach_data)
